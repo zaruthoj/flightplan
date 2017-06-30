@@ -1,0 +1,149 @@
+<!doctype html>
+<html ng-app="app">
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.0/angular.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.0/angular-touch.js"></script>
+    <script src="http://ajax.googleapis.com/ajax/libs/angularjs/1.5.0/angular-animate.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.5/angular-aria.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.5/angular-messages.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angular_material/1.1.0/angular-material.min.js"></script>
+    <script src="http://ui-grid.info/docs/grunt-scripts/csv.js"></script>
+    <script src="http://ui-grid.info/docs/grunt-scripts/pdfmake.js"></script>
+    <script src="http://ui-grid.info/docs/grunt-scripts/vfs_fonts.js"></script>
+    <script src="http://ui-grid.info/release//ui-grid-stable.js"></script>
+    
+    <script src="bower_components/x2js/xml2json.js"></script>
+    <script src="bower_components/angular-x2js/src/x2js.js"></script>
+    <script src="navlog.js"></script>
+    
+    <link data-require="bootstrap@*" data-semver="3.2.0" rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.css" />
+    <link rel="stylesheet" href="http://ui-grid.info/release/ui-grid-stable.css">
+    <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/1.1.0/angular-material.min.css">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link rel="stylesheet" href="main.css">
+  </head>
+  <body ng-app="app">
+    <div ng-controller="MenuBar as ctrl" id="menu" ng-cloak>
+      <md-toolbar class="md-menu-toolbar">
+        <div layout="row">
+          <md-toolbar-filler layout layout-align="center center">
+            <md-icon ng_bind="'flight_takeoff'"></md-icon>
+          </md-toolbar-filler>
+
+          <div>
+              <input value="{{plan_name}}" style="border:0px;margin:5px 0px 0px 5px;" type="text"></input>
+            <md-menu-bar>
+              <md-menu>
+                <button ng-click="$mdOpenMenu()">
+                  File
+                </button>
+                <md-menu-content>
+                  <md-menu-item>
+                    <md-button ng-click="ctrl.Import($event)">
+                      Import FPL
+                    </md-button>
+                  </md-menu-item>
+                  <md-menu-item>
+                    <md-button ng-click="ctrl.Open($event)">
+                      Open
+                    </md-button>
+                  </md-menu-item>
+                </md-menu-content>
+              </md-menu>
+              <md-menu>
+                <button ng-click="$mdOpenMenu()">
+                  Edit
+                </button>
+                <md-menu-content>
+                  <md-menu-item>
+                    <md-button ng-click="ctrl.sampleAction('flight', $event)">
+                      Flight
+                    </md-button>
+                  </md-menu-item>
+                  <md-menu-item>
+                    <md-button ng-click="ctrl.sampleAction('manage_aircraft', $event)">
+                      Manage Aircraft
+                    </md-button>
+                  </md-menu-item>
+                  <md-menu-item>
+                    <md-button ng-click="ctrl.sampleAction('select_aircraft', $event)">
+                      Select Aircraft
+                    </md-button>
+                  </md-menu-item>
+                </md-menu-content>
+              </md-menu>
+              <md-menu>
+                <button ng-click="$mdOpenMenu()">
+                  Templates
+                </button>
+                <md-menu-content>
+                  <md-menu-item>
+                    <md-button ng-click="ctrl.SaveTemplate($event)">
+                      Save
+                    </md-button>
+                  </md-menu-item>
+                </md-menu-content>
+              </md-menu>
+            </md-menu-bar>
+          </div>
+        </div>
+      </md-toolbar>
+    </div>
+    <div class="main" layout="row" layout-align="start" ng-cloak>
+      <div flex></div>
+      <div class="content" layout="row" md-whiteframe="4">
+        <div ng-controller="Waypoints">
+          <div id="waypoints" ui-grid="gridOptions" class="grid waypoint_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+        </div>
+        <div ng-controller="Legs">
+          <div id="legs" ui-grid="gridOptions" class="grid leg_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+        </div>
+      </div>
+      <div flex></div>
+      <div ng-controller="PlanSettings" class="plan_settings" id="plan_settings" md-whiteframe="4" flex="none">
+        <md-content layout="column" layout-padding>
+          <form name="plan_settings_form">
+            <md-input-container class="md-block" flex>
+              <label>Departure Elevation</label>
+              <input ng-model="settings.departure_elevation">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Arrival Elevation</label>
+              <input ng-model="settings.arrival_elevation">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Starting Fuel</label>
+              <input ng-model="settings.fuel">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Magnetic Variance</label>
+              <input ng-model="settings.variance">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Altimeter (inHg)</label>
+              <input ng-model="settings.altimeter">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Departure OAT(c))</label>
+              <input ng-model="settings.departure_oat">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Cruise OAT(c)</label>
+              <input ng-model="settings.cruise_oat">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Arrival OAT(c)</label>
+              <input ng-model="settings.arrival_oat">
+            </md-input-container>
+            
+          </form>
+        </md-content>
+      </div>
+    </div>
+    <form id="fpl_file_form">
+      <input type="file" id="fpl_file" style="visibility:hidden;">
+    </form>
+  </body>
+</html>

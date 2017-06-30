@@ -1,0 +1,27 @@
+<md-dialog aria-label="Open Flightplan">
+  <form ng-cloak>
+    <md-toolbar>
+      <div class="md-toolbar-tools">
+        Open Flight Plan
+      </div>
+    </md-toolbar>
+  
+    <md-dialog-content>
+      <div class="md-dialog-content" layout="column">
+        <md-input-container>
+          <label>Saved Plans</label>
+          <md-select ng-model="chosenOption">
+            <md-option ng-repeat="option in options" ng-value="option">
+              {{option}}
+            </md-option>
+      	  </md-select>
+        </md-input-container>
+      </div>
+    </md-dialog-content>
+  
+    <md-dialog-actions layout="row">
+      <md-button ng-click="close()" class="md-primary">Close</md-button>
+      <md-button ng-click="open()" class="md-primary">Open</md-button>
+    </md-dialog-actions>
+  </form>
+</md-dialog>

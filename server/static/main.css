@@ -1,0 +1,51 @@
+.grid {
+  background-color: white;
+}
+
+
+.waypoint_grid {
+  width: 300px;
+  height: 400px;
+  /*float: left;*/
+}
+
+.leg_grid {
+  width: 700px;
+  height: 400px;
+  /*float: left;
+  text-align: center;*/
+}
+
+.main {
+  width: 100%;
+  height: 100%;
+  background-color: #F8F8F8;
+  float: center;
+}
+
+.content {
+  margin: 5px 5px;
+}
+
+.plan_settings {
+  margin: 5px 0px;
+}
+
+.leg_grid .ui-grid-header-cell {
+  padding-bottom: 15px;
+}
+
+.ui-grid-header-cell .ui-grid-cell-contents {
+  height: 30px;
+  white-space: normal;
+  overflow: visible;
+  width: auto !important;
+  /*text-overflow: ellipsis;*/
+}
+
+.ui-grid-row .ui-grid-cell {
+    border-top: solid !important;
+    border-right: solid !important;
+    border-width: 1px !important;
+}
+
