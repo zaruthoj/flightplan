@@ -16,8 +16,9 @@
     
     <script src="bower_components/x2js/xml2json.js"></script>
     <script src="bower_components/angular-x2js/src/x2js.js"></script>
+    <script src="bower_components/angular-bootstrap/ui-bootstrap-tpls.min.js"></script>
     <script src="navlog.js"></script>
-    
+
     <link data-require="bootstrap@*" data-semver="3.2.0" rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.css" />
     <link rel="stylesheet" href="http://ui-grid.info/release/ui-grid-stable.css">
     <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/1.1.0/angular-material.min.css">
@@ -33,7 +34,7 @@
           </md-toolbar-filler>
 
           <div>
-              <input value="{{plan_name}}" style="border:0px;margin:5px 0px 0px 5px;" type="text"></input>
+              <input value="{{fp.name}}" style="border:0px;margin:5px 0px 0px 5px;" type="text"></input>
             <md-menu-bar>
               <md-menu>
                 <button ng-click="$mdOpenMenu()">
@@ -90,15 +91,25 @@
           </div>
         </div>
       </md-toolbar>
+      <form id="fpl_file_form">
+        <input type="file" id="fpl_file" file-model="FileChanged" style="visibility:hidden;position:absolute;">
+      </form>
     </div>
     <div class="main" layout="row" layout-align="start" ng-cloak>
       <div flex></div>
-      <div class="content" layout="row" md-whiteframe="4">
-        <div ng-controller="Waypoints">
-          <div id="waypoints" ui-grid="gridOptions" class="grid waypoint_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+      <div class="content" layout="column">
+        <div class="airport" layout="row">
+          <airport-info ng-controller="Airport" ng-init="type='departure'"></airport-info>
+          <div ng-controller="Atis">
+          </div>
         </div>
-        <div ng-controller="Legs">
-          <div id="legs" ui-grid="gridOptions" class="grid leg_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+        <div class="navlog" layout="row" md-whiteframe="4">
+          <div ng-controller="Waypoints">
+            <div id="waypoints" ui-grid="gridOptions" class="grid waypoint_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+          </div>
+          <div ng-controller="Legs">
+            <div id="legs" ui-grid="gridOptions" class="grid leg_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+          </div>
         </div>
       </div>
       <div flex></div>
@@ -107,43 +118,51 @@
           <form name="plan_settings_form">
             <md-input-container class="md-block" flex>
               <label>Departure Elevation</label>
-              <input ng-model="settings.departure_elevation">
+              <input ng-model="fp.settings.departure_elevation" ng-change="SaveFlightPlan()">
             </md-input-container>
             <md-input-container class="md-block" flex>
               <label>Arrival Elevation</label>
-              <input ng-model="settings.arrival_elevation">
+              <input ng-model="fp.settings.arrival_elevation" ng-change="SaveFlightPlan()">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Cruise Altitude</label>
+              <input ng-model="fp.settings.cruise_altitude" ng-change="SaveFlightPlan()">
+            </md-input-container>
+            <md-input-container class="md-block" flex>
+              <label>Power Percent</label>
+              <input ng-model="fp.settings.power_pct" ng-change="SaveFlightPlan()">
             </md-input-container>
             <md-input-container class="md-block" flex>
               <label>Starting Fuel</label>
-              <input ng-model="settings.fuel">
+              <input ng-model="fp.settings.fuel" ng-change="SaveFlightPlan()">
             </md-input-container>
             <md-input-container class="md-block" flex>
+              <label>Starting Weight</label>
+              <input ng-model="fp.settings.weight" ng-change="SaveFlightPlan()">
+            </md-input-container><md-input-container class="md-block" flex>
               <label>Magnetic Variance</label>
-              <input ng-model="settings.variance">
+              <input ng-model="fp.settings.variance" ng-change="SaveFlightPlan()">
             </md-input-container>
             <md-input-container class="md-block" flex>
               <label>Altimeter (inHg)</label>
-              <input ng-model="settings.altimeter">
+              <input ng-model="fp.settings.altimeter" ng-change="SaveFlightPlan()">
             </md-input-container>
             <md-input-container class="md-block" flex>
               <label>Departure OAT(c))</label>
-              <input ng-model="settings.departure_oat">
+              <input ng-model="fp.settings.departure_oat" ng-change="SaveFlightPlan()">
             </md-input-container>
             <md-input-container class="md-block" flex>
               <label>Cruise OAT(c)</label>
-              <input ng-model="settings.cruise_oat">
+              <input ng-model="fp.settings.cruise_oat" ng-change="SaveFlightPlan()">
             </md-input-container>
             <md-input-container class="md-block" flex>
               <label>Arrival OAT(c)</label>
-              <input ng-model="settings.arrival_oat">
+              <input ng-model="fp.settings.arrival_oat" ng-change="SaveFlightPlan()">
             </md-input-container>
             
           </form>
         </md-content>
       </div>
     </div>
-    <form id="fpl_file_form">
-      <input type="file" id="fpl_file" style="visibility:hidden;">
-    </form>
   </body>
 </html>

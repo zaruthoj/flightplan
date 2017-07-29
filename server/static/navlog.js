@@ -1,6 +1,7 @@
 server_host = document.location.protocol + '//' + document.location.host
-var app = angular.module('app', ['ui.grid', 'ui.grid.edit', 'ui.grid.resizeColumns',
-                                 'cb.x2js', 'ngMaterial']);
+var app = angular.module('app', [
+    'ui.grid', 'ui.grid.edit', 'ui.grid.resizeColumns', 'ui.bootstrap',
+    'cb.x2js', 'ngMaterial']);
  
 app.filter('keyboardShortcut', function($window) {
   return function(str) {
@@ -23,11 +24,14 @@ app.filter('keyboardShortcut', function($window) {
   };
 });
 
-app.service('FlightPlan', function() {
+app.service('FlightPlan', function($timeout, $http) {
   this.default_settings = {
     'departure_elevation': NaN,
     'arrival_elevation': NaN,
+    'cruise_altitude': NaN,
+    'power_pct': NaN,
     'fuel': NaN,
+    'weight': NaN,
     'variance': NaN,
     'altimeter': NaN,
     'departure_oat': NaN,
@@ -39,13 +43,95 @@ app.service('FlightPlan', function() {
     'legs': [],
     'settings': this.default_settings,
     'name': 'Untitled',
-    'uid': null,
+    'uid': -1,
   };
+
+  this.airports = {}
+  this.airports.arrival = {}
+  this.airports.departure = {}
+
+  this._LoadFrequency = function(airport_type, category, frequency_labels) {
+    this.airports[type][category + '_label'] = ''
+    for (label of frequency_labels) {
+      if (label in this.plan[airport_type].frequencies) {
+        this.airports[airport_type][category + '_label'] = label;
+        this.airports[airport_type][category + '_freq'] =
+            this.plan[airport_type].frequencies[label].frequency_mhz;
+        break;
+      }
+    }
+  }
+
+  this.LoadFlightPlan = function(flight_plan) {
+    this.plan.name = flight_plan.name;
+    angular.copy(flight_plan, this.plan)
+    if (!flight_plan.uid) {
+      this.plan.uid = -1;
+    }
+    for (type of ['arrival', 'departure']) {
+      this._LoadFrequency(type, 'weather', ['ATIS', 'AWOS', 'ASOS'])
+      this._LoadFrequency(type, 'com', ['TWR', 'CTAF'])
+      this._LoadFrequency(type, 'ground', ['GND', 'Ground'])
+      this.airports[type].runways = []
+      for (runway_name in this.plan[type].runways) {
+        runway = this.plan[type].runways[runway_name];
+        this.airports[type].runways.push(
+            {'name': runway_name, 'length': runway.length_ft})
+      }
+    }
+    /*for (var key in flight_plan.settings) {
+      this.plan.settings[key] = flight_plan.settings[key];
+    }
+    for (var category of ['waypoints', 'legs']) {
+      this.plan[category].length = 0;
+      for (var row of flight_plan[category]) {
+        this.plan[category].push(row);
+      }
+    }*/
+
+  }
+  
+  this.SaveFlightPlan = function() {
+    var plan = {};
+    angular.copy(this.plan, plan);
+    for (var leg of plan.legs) {
+      delete leg.$$hashKey;
+    }
+    var json_fpl = JSON.stringify(plan)
+    $http.post(server_host + '/fp/api/plans',
+               JSON.stringify(plan)).
+      success((function(flight_plan) {
+          return function(data, status, headers, config) {
+              console.log(data);
+              $timeout(flight_plan.LoadFlightPlan(data))
+          }
+      })(this)).
+    error(function(data, status, headers, config) {
+      console.log(data);
+    });
+  };
+
+  this.FetchAndLoadFlightPlan = function(uid) {
+    $http.get(server_host + '/fp/api/plans/' + uid, {'cache': false}).
+      success((function(flight_plan) {
+          return function(plan, status, headers, config) {
+              flight_plan.LoadFlightPlan(plan);
+          }
+      })(this))
+      .error(function(data, status, headers, config) {
+        console.log(data);
+      });
+  }
+  var url = new URL(window.location.href);
+  if (url.searchParams.has("uid")) {
+    var uid = url.searchParams.get("uid");
+    this.FetchAndLoadFlightPlan(uid);
+  }
 });
 
-app.controller('MenuBar', ['$scope', '$http', '$mdDialog',
-               function MenuBar($scope, $http, $mdDialog) {
-  $scope.plan_name = 'Untitled';
+app.controller('MenuBar', ['$scope', '$http', '$mdDialog', 'FlightPlan', 'x2js',
+               function MenuBar($scope, $http, $mdDialog, FlightPlan, x2js) {
+  $scope.fp = FlightPlan.plan;
   this.settings = {
     printLayout: true,
     showRuler: true,
@@ -58,6 +144,24 @@ app.controller('MenuBar', ['$scope', '$http', '$mdDialog',
     $('#fpl_file').click();
   };
 
+  $scope.FileChanged = function(event) {
+    var reader = new FileReader();
+    var file = null;
+    if (event.currentTarget.files.length == 1) {
+      file = event.currentTarget.files[0];
+    }
+  
+    reader.onload = function(e) {
+      var json_fpl = x2js.xml_str2json(reader.result);
+      var flight_plan = ConvertFpl(json_fpl, file.name);
+      $scope.$apply(FlightPlan.LoadFlightPlan(flight_plan));
+    };
+    
+    if (file != '') {
+      reader.readAsText(file);
+    }
+  };
+
   this.Open = function(event) {
     $mdDialog.show(
     {
@@ -66,25 +170,6 @@ app.controller('MenuBar', ['$scope', '$http', '$mdDialog',
       controller: OpenDialogController,
     });
   }
-
-  $scope.LoadFlightPlan = function(flight_plan) {
-    $scope.plan_name = flight_plan.plan_name;
-  }
-
-  $scope.SaveFlightPlan = function() {
-    var flight_plan = {}
-    flight_plan.plan_name = $scope.plan_name;
-    $("#legs").scope().SaveFlightPlan(flight_plan);
-    $("#waypoints").scope().SaveFlightPlan(flight_plan);
-    $("#plan_settings").scope().SaveFlightPlan(flight_plan);
-    $http.post(server_host + '/fp/api/plans', JSON.stringify(flight_plan)).
-      success(function(data, status, headers, config) {
-        console.log(data);
-    }).
-    error(function(data, status, headers, config) {
-      console.log(data);
-    });
-  };
 
   this.SaveTemplate = function(event) {
     var template = {
@@ -111,10 +196,15 @@ app.controller('MenuBar', ['$scope', '$http', '$mdDialog',
   };
 }]);
 
-function OpenDialogController($scope, $http, $mdDialog, $timeout) {
+function OpenDialogController($scope, $http, $mdDialog, FlightPlan) {
+  $scope.saved_plans = {};
   $http.get(server_host + '/fp/api/plans', {'cache': false}).
     success(function(saved_plans, status, headers, config) {
-      $scope.options = saved_plans
+      $scope.options = Object.values(saved_plans)
+      $scope.saved_plans = {};
+      for (key in saved_plans) {
+        $scope.saved_plans[saved_plans[key]] = key;
+      }
     }).error(function(data, status, headers, config) {
       console.log(data);
     });
@@ -122,13 +212,12 @@ function OpenDialogController($scope, $http, $mdDialog, $timeout) {
   $scope.open = function() {
     $mdDialog.hide();
     var plan_name = $scope.chosenOption;
-
-    $http.get(server_host + '/fp/api/plans/' + plan_name, {'cache': false}).
-      success(function(flight_plan, status, headers, config) {
-        $timeout(LoadFlightPlan(flight_plan));
-      }).error(function(data, status, headers, config) {
-        console.log(data);
-      });
+    if (!(plan_name in $scope.saved_plans)) {
+      console.log("Could not find plan with name: " + plan_name);
+      return;
+    }
+    var plan_uid = $scope.saved_plans[plan_name];
+    FlightPlan.FetchAndLoadFlightPlan(plan_uid);
   };
 
   $scope.close = function() {
@@ -170,61 +259,27 @@ function ApplyGridTemplate(scope, label, template) {
   }
 }
 
-app.controller('PlanSettings', ['$scope', 'x2js',
-    function PlanSettings($scope, x2js) {
-  $scope.XmlTojson = function(xml) {
-    return x2js.xml_str2json(xml);
-  }
-  $scope.default_settings = {
-    'departure_elevation': NaN,
-    'arrival_elevation': NaN,
-    'fuel': NaN,
-    'variance': NaN,
-    'altimeter': NaN,
-    'departure_oat': NaN,
-    'cruise_oat': NaN,
-    'arrival_oat': NaN,
-  };
-  $scope.settings = $scope.default_settings;
-  $scope.LoadFlightPlan = function(flight_plan) {
-    $scope.$apply(function() {
-      $scope.settings = $scope.default_settings;
-      for (var key in flight_plan.settings) {
-        $scope.settings[key] = flight_plan.settings[key];
-      }
-    });
-  };
-  
-  $scope.SaveFlightPlan = function(flight_plan) {
-    flight_plan.settings = {}
-    for (var key in $scope.settings) {
-      flight_plan.settings[key] = $scope.settings[key];
-    }
+app.controller('PlanSettings', ['$scope', 'FlightPlan',
+    function PlanSettings($scope, FlightPlan) {
+  $scope.fp = FlightPlan.plan;
+  $scope.SaveFlightPlan = function() {
+    FlightPlan.SaveFlightPlan();
   };
 }]);
 
-app.controller('Waypoints', ['$scope', '$http', '$timeout', 'uiGridConstants',
-               function ($scope, $http, $timeout, uiGridConstants) {
-  
-  $scope.LoadFlightPlan = function(flight_plan) {
-    $scope.$apply(function() {
+app.controller('Waypoints', ['$scope', '$http', '$timeout',
+                             'uiGridConstants', 'FlightPlan',
+               function ($scope, $http, $timeout, uiGridConstants,
+                         FlightPlan) {
+  $scope.fp = FlightPlan.plan;
+  $scope.$watchCollection('fp.waypoints', function(newVal, old) {
     $scope.gridOptions.data = [];
-      for (var waypoint of flight_plan.waypoints) {
-        $scope.gridOptions.data.push(waypoint);
-      }
-    });
-  };
-  
-  $scope.SaveFlightPlan = function(flight_plan) {
-    flight_plan.waypoints = [];
-    for (waypoint of $scope.gridOptions.data) {
-      flight_plan.waypoints.push({
-        'notes': waypoint.notes,
-        'waypoint': waypoint.waypoiny,
-      });
+    if (typeof newVal == 'undefined') {return;}
+    for (waypoint of newVal) {
+      $scope.gridOptions.data.push(waypoint);
     }
-  };
-
+  }); 
+  
   $scope.gridOptions = {
     'enableHorizontalScrollbar': uiGridConstants.scrollbars.NEVER,
     'enableVerticalScrollbar': uiGridConstants.scrollbars.NEVER,
@@ -244,25 +299,23 @@ app.controller('Waypoints', ['$scope', '$http', '$timeout', 'uiGridConstants',
         width: '50%'
       },
     ],
-    'data': [{
-      "notes": "Departure",
-      "waypoint": "KPAO",
-    }, {
-      "notes": "OSI/073",
-      "waypoint": "OSI",
-    }, {
-      "notes": "Destination",
-      "waypoint": "KHAF",
-    }],
+    'data': [],
   };
-  
+
+  $scope.gridOptions.onRegisterApi = function(gridApi){
+    //set gridApi on scope
+    $scope.gridApi = gridApi;
+    gridApi.edit.on.afterCellEdit($scope, function(rowEntity, colDef,
+                                                   newValue, oldValue) {
+      FlightPlan.SaveFlightPlan();
+    });
+  };
   FetchAndLoadGridTemplate($http, $scope, 'waypoints');
 }]);
 
 variance = -13.5;
-windDir = 310;
-windSpeed = 10;
-ias = 100;
+wind_dir = 310;
+wind_speed = 10;
 altitude = 3500;
 
 function degrees (angle) {
@@ -301,15 +354,16 @@ function calc_tc(row) {
 }
 
 function calc_tas(row) {
-  return row.entity.ias * (1 + .02 * row.entity.altitude / 1000)
+  //return row.entity.ias * (1 + .02 * row.entity.altitude / 1000)
+  return row.entity.tas;
 }
 
 function calc_wca(row) {
   return degrees(
     Math.asin(
       Math.sin(
-        radians(row.entity.windDir - calc_tc(row))
-      ) * row.entity.windSpeed / calc_tas(row)));
+        radians(row.entity.wind_dir - calc_tc(row))
+      ) * row.entity.wind_speed / calc_tas(row)));
 }
 
 function calc_mc(row) {
@@ -322,12 +376,12 @@ function calc_mh(row) {
 
 function calc_gs(row) {
   var tas = calc_tas(row);
-  var windSpeed = row.entity.windSpeed;
-  var windDir = row.entity.windDir;
+  var wind_speed = row.entity.wind_speed;
+  var wind_dir = row.entity.wind_dir;
   var tc = calc_tc(row);
   return Math.sqrt(
-    Math.pow(tas, 2) + Math.pow(windSpeed, 2)
-    - 2 * tas * windSpeed * Math.cos(radians(windDir - tc - calc_wca(row))));
+    Math.pow(tas, 2) + Math.pow(wind_speed, 2)
+    - 2 * tas * wind_speed * Math.cos(radians(wind_dir - tc - calc_wca(row))));
 }
 
 function calc_ete(row) {
@@ -335,31 +389,17 @@ function calc_ete(row) {
 }
 
 app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
-               function ($scope, $http, $timeout, uiGridConstants) {
-               
-  $scope.LoadFlightPlan = function(flight_plan) {
-    $scope.gridOptions.data = [];
-    $scope.$apply(function() {
-      for (leg of flight_plan.legs) {
-        $scope.gridOptions.data.push(leg);
-      }
-    });
-  };
-
-  $scope.SaveFlightPlan = function(flight_plan) {
-    flight_plan.legs = [];
-    for (leg of $scope.gridOptions.data) {
-      flight_plan.legs.push({
-        'lat_start': leg.lat_start,
-        'lon_start': leg.lon_start,
-        'lat_end': leg.lat_end,
-        'lon_end': leg.lon_end,
-        'windDir': leg.windDir,
-        'windSpeed': leg.windSpeed,
-        'ias': leg.ias,
-        'altitude': leg.altitude});
+                        'FlightPlan',
+               function ($scope, $http, $timeout, uiGridConstants, FlightPlan) {
+  $scope.fp = FlightPlan.plan;
+  $scope.data = []
+  $scope.$watchCollection('fp.legs', function(newVal) {
+    if (typeof newVal == 'undefined') {return;}
+    $scope.gridOptions.data.length = 0;
+    for (leg of newVal) {
+      $scope.gridOptions.data.push(leg);
     }
-  };
+  });
 
   $scope.CalcDist = function(row) {
     return calc_dist(row).toFixed(1);
@@ -392,7 +432,21 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
   $scope.CalcEte = function(row) {
     return calc_ete(row).toFixed(1);
   };
-  
+
+  $scope.Errors = function(row, error_type) {
+    if (error_type in row.entity.errors) {
+      return row.entity.errors[error_type].join(', ');
+    }
+    return '';
+  }
+ 
+  $scope.GetClass = function(row, error_type) {
+    if (error_type in row.entity.errors) {
+      return 'cell-error';
+    }
+    return '';
+  }
+
   $scope.gridOptions = {
     'enableHorizontalScrollbar': uiGridConstants.scrollbars.NEVER,
     'enableVerticalScrollbar': uiGridConstants.scrollbars.NEVER,
@@ -425,14 +479,7 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
         enableColumnMenu: false,
         visible: false
       }, {
-        name: 'ias',
-        displayName: 'IAS',
-        enableCellEdit: true,
-        type: 'number',
-        enableColumnMenu: false,
-        visible: false
-      }, {
-        name: 'lowAlt',
+        name: 'low_alt',
         displayName: '',
         enableCellEdit: true,
         enableColumnMenu: false,
@@ -443,9 +490,12 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
         displayName: 'Alt',
         enableCellEdit: true,
         type: 'number',
-        enableColumnMenu: false
+        enableColumnMenu: false,
+        cellClass: function(grid, row, col, rowRenderIndex, colRenderIndex) {
+          return $scope.GetClass(row, 'altitude')
+        }
       }, {
-        name: 'highAlt',
+        name: 'high_alt',
         displayName: '',
         enableCellEdit: true,
         enableColumnMenu: false,
@@ -456,15 +506,18 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
         displayName: 'RPM',
         enableCellEdit: true,
         type: 'number',
-        enableColumnMenu: false
+        enableColumnMenu: false,
+        cellClass: function(grid, row, col, rowRenderIndex, colRenderIndex) {
+          return $scope.GetClass(row, 'rpm')
+        }
       }, {
-        name: 'windDir',
+        name: 'wind_dir',
         displayName: 'Wdir',
         enableCellEdit: true,
         type: 'number',
         enableColumnMenu: false
       }, {
-        name: 'windSpeed',
+        name: 'wind_speed',
         displayName: 'Ws',
         enableCellEdit: true,
         type: 'number',
@@ -476,7 +529,8 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
         type: 'number',
         enableColumnMenu: false,
         cellTemplate: '<div class="ui-grid-cell-contents">{{grid.appScope.CalcTc(row)}}</div>',
-      }, {name: 'mc',
+      }, {
+        name: 'mc',
         displayName: 'MC',
         type: 'number',
         enableColumnMenu: false,
@@ -494,6 +548,7 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
         enableCellEdit: false,
         type: 'number',
         enableColumnMenu: false,
+        visible: false,
         cellTemplate: '<div class="ui-grid-cell-contents">{{grid.appScope.CalcWca(row)}}</div>',
       }, {
         name: 'tas',
@@ -502,8 +557,11 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
         type: 'number',
         enableColumnMenu: false,
         cellTemplate: '<div class="ui-grid-cell-contents">{{grid.appScope.CalcTas(row)}}</div>',
+        cellClass: function(grid, row, col, rowRenderIndex, colRenderIndex) {
+          return $scope.GetClass(row, 'tas')
+        }
       }, {
-        name: 'groundSpeed',
+        name: 'ground_speed',
         displayName: 'GS',
         enableCellEdit: false,
         type: 'number',
@@ -535,7 +593,10 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
         displayName: 'EFU',
         enableCellEdit: true,
         type: 'number',
-        enableColumnMenu: false
+        enableColumnMenu: false,
+        cellClass: function(grid, row, col, rowRenderIndex, colRenderIndex) {
+          return $scope.GetClass(row, 'fuel')
+        }
       }, {
         name: 'efr',
         displayName: 'EFR',
@@ -548,37 +609,23 @@ app.controller('Legs', ['$scope', '$http', '$timeout', 'uiGridConstants',
         enableCellEdit: true,
         type: 'number',
         enableColumnMenu: false
-      },
+      }, {
+        name: 'errors',
+        displayName: 'Errors',
+        visible: false, 
+      }
     ],
-    'data': [{
-      'lowAlt': 20,
-      'altitude': 3500,
-      'highAlt': 40,
-      'windDir': 290,
-      'windSpeed': 10,
-      'tc': 270,
-      'distance': 8,
-      'ias': 90,
-    }, {
-      'lowAlt': 10,
-      'altitude': 2000,
-      'highAlt': 40,
-      'windDir': 270,
-      'windSpeed': 15,
-      'tc': 290,
-      'distance': 10,
-      'ias': 115,
-    }],
+    'data': [],
   };
   
   FetchAndLoadGridTemplate($http, $scope, 'legs');
   
   $scope.gridOptions.onRegisterApi = function(gridApi){
-          //set gridApi on scope
+    //set gridApi on scope
     $scope.gridApi = gridApi;
     gridApi.edit.on.afterCellEdit($scope, function(rowEntity, colDef,
                                                    newValue, oldValue) {
-      $("#menu").scope().SaveFlightPlan();
+      FlightPlan.SaveFlightPlan();
     });
   };
 }]);
@@ -588,7 +635,7 @@ function ConvertFpl(json_fpl, file_name) {
     'waypoints': [],
     'legs': [],
     'settings': [],
-    'plan_name': file_name.split('.')[0],
+    'name': file_name.split('.')[0],
   };
   waypoints = json_fpl['flight-plan']['waypoint-table']['waypoint'];
   for (var i = 0; i < waypoints.length; i++) {
@@ -606,9 +653,9 @@ function ConvertFpl(json_fpl, file_name) {
         'lon_start': start['lon'],
         'lat_end': end['lat'],
         'lon_end': end['lon'],
-        'windDir': windDir,
-        'windSpeed': windSpeed,
-        'ias': ias,
+        'wind_dir': wind_dir,
+        'wind_speed': wind_speed,
+        'tas': 0,
         'altitude': altitude,
       });
     }
@@ -616,30 +663,44 @@ function ConvertFpl(json_fpl, file_name) {
   return flight_plan;
 }
 
-function LoadFlightPlan(flight_plan) {
-  $("#waypoints").scope().LoadFlightPlan(flight_plan);
-  $("#legs").scope().LoadFlightPlan(flight_plan);
-  $("#plan_settings").scope().LoadFlightPlan(flight_plan);
-  $("#menu").scope().LoadFlightPlan(flight_plan);
-}
-
-$(document).ready(function(){
-  $("#fpl_file").on('change', function() {
-    var reader = new FileReader();
-    var file = null;
-    if ($("#fpl_file").length == 1 &&
-        $("#fpl_file")[0].files.length == 1) {
-      file = $("#fpl_file")[0].files[0];
+app.directive('fileModel', function() {
+  return {
+    restrict: 'A',
+    link: function (scope, element, attrs) {
+      var onChangeFunc = scope.$eval(attrs.fileModel);
+      element.bind('change', onChangeFunc);
     }
-  
-    reader.onload = function(e) {
-      var json_fpl = $("#plan_settings").scope().XmlTojson(reader.result);
-      flight_plan = ConvertFpl(json_fpl, file.name);
-      LoadFlightPlan(flight_plan);
-    };
-    
-    if (file != '') {
-      reader.readAsText(file);
-    }
-  });
+  };
 });
+
+app.directive('airportInfo', function() {
+  return {
+    templateUrl: 'airport_info.html',
+  }
+});
+
+app.controller('Airport', ['$scope', 'FlightPlan',
+    function Airport($scope, FlightPlan) {
+  $scope.airport = {};
+  $scope.$watch('type', function() {
+    $scope.airport = FlightPlan.airports[$scope.type];
+  });
+  $scope.airport_diagram = "https://flttrack.fltplan.com/AirportDiagrams/KPAOapt.jpg";
+  $scope.weather_label = "ATIS";
+  $scope.ground_label = "Ground";
+  $scope.com_label = "Tower";
+  $scope.weather_freq = "135.27";
+  $scope.ground_freq = "125.0";
+  $scope.com_freq = "118.6";
+  $scope.tpa = "1000 / 800";
+  $scope.runway = [];
+  $scope.runway.push({"name": "31 / 13", "length": "2500"});
+  $scope.runway.push({"name": "", "length": ""});
+  $scope.takeoff_performance = "800 / 1200";
+  $scope.landing_performance = "800 / 1275";
+}]);
+
+app.controller('Atis', ['$scope', 'FlightPlan',
+    function Departure($scope, FlightPlan) {
+  $scope.fp = FlightPlan.plan;
+}]);
