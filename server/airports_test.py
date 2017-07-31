@@ -15,6 +15,7 @@ class TestAirports(unittest.TestCase):
         '118.6',
         data['frequencies'].get('TWR', {}).get('frequency_mhz', None))
     self.assertEqual(data['elevation_ft'], '4')
+    self.assertEqual(data['id'], 'KPAO')
 
   def test_byron(self):
     data = self.airports.get_data('C83')

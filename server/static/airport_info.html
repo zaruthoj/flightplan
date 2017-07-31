@@ -3,14 +3,18 @@
     <td style="background-color:black;color:white">
       <b>{{type.charAt(0).toUpperCase() + type.slice(1)}}</b>
     </td>
-    <td colspan="4" style="border-width:0px;"></td>
+    <td style="text-align:left;border-width:0px;padding-left:5px;">Time:</td>
+    <td style="text-align:right;border-width:0px;">Tach:</td>
+    <td style="border-width:0px;"></td>
+    <td style="border-width:0px;width:75px;">Hobbs:</td>
+    <td style="border-width:0px;width:124px;"></td>
   </tr>
     <td>{{airport.weather_label}}</td>
     <td>{{airport.ground_label}}</td>
     <td>{{airport.com_label}}</td>
     <td>TPA</td>
-    <td rowspan=5>
-      <img width=150 height=150 ng-src="{{airport_diagram}}"</img>
+    <td rowspan=5 colspan=2>
+      <img width=150 height=150 ng-src="{{airport.url}}"</img>
     </td>
   <tr>
     <td>{{airport.weather_freq}}</td>

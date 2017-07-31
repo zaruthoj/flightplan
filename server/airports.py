@@ -53,6 +53,7 @@ class AirportFiles(object):
     while airports.get_airport_id():
       current_id = airports.get_airport_id()
       _, self.airport_data[current_id] = airports.get_fields()
+      self.airport_data[current_id]['id'] = current_id
       airports.proceed()
 
       self.airport_data[current_id]['runways'] = {}

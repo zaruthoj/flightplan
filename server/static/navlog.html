@@ -17,12 +17,14 @@
     <script src="bower_components/x2js/xml2json.js"></script>
     <script src="bower_components/angular-x2js/src/x2js.js"></script>
     <script src="bower_components/angular-bootstrap/ui-bootstrap-tpls.min.js"></script>
+    <script src="bower_components/angularPrint/angularPrint.js"></script>
     <script src="navlog.js"></script>
 
     <link data-require="bootstrap@*" data-semver="3.2.0" rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.2.0/css/bootstrap.css" />
     <link rel="stylesheet" href="http://ui-grid.info/release/ui-grid-stable.css">
     <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/angular_material/1.1.0/angular-material.min.css">
     <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link media="print" rel="stylesheet" href="bower_components/angularPrint/angularPrint.css">
     <link rel="stylesheet" href="main.css">
   </head>
   <body ng-app="app">
@@ -49,6 +51,11 @@
                   <md-menu-item>
                     <md-button ng-click="ctrl.Open($event)">
                       Open
+                    </md-button>
+                  </md-menu-item>
+                  <md-menu-item>
+                    <md-button print-btn>
+                       Print
                     </md-button>
                   </md-menu-item>
                 </md-menu-content>
@@ -97,18 +104,35 @@
     </div>
     <div class="main" layout="row" layout-align="start" ng-cloak>
       <div flex></div>
-      <div class="content" layout="column">
-        <div class="airport" layout="row">
-          <airport-info ng-controller="Airport" ng-init="type='departure'"></airport-info>
-          <div ng-controller="Atis">
+      <div layout="column" layout-align="start">
+        <div print-section class="content" layout="column">
+          <div class="airport" layout="row" layout-align="center end">
+            <airport-info ng-controller="Airport" ng-init="type='departure'"></airport-info>
+            <div flex></div>
+            <atis></atis>
           </div>
-        </div>
-        <div class="navlog" layout="row" md-whiteframe="4">
-          <div ng-controller="Waypoints">
-            <div id="waypoints" ui-grid="gridOptions" class="grid waypoint_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+          <div class="navlog" layout="row" md-whiteframe="4">
+            <div ng-controller="WaypointsWithNotes">
+              <div id="waypoints" ui-grid="gridOptions" class="grid waypoint_note_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+            </div>
+            <div ng-controller="Legs">
+              <div id="legs" ui-grid="gridOptions" class="grid leg_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+            </div>
+            <div ng-controller="Waypoints">
+              <div id="waypoints" ui-grid="gridOptions" class="grid waypoint_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+            </div>
           </div>
-          <div ng-controller="Legs">
-            <div id="legs" ui-grid="gridOptions" class="grid leg_grid" ui-grid-resize-columns ui-grid-edit ui-grid-cellnav></div>
+          <div class="airport" layout="row" layout-align="center end">
+
+            <div layout="column" layout-align="end">
+              <airport-info ng-controller="Airport" ng-init="type='arrival'">
+              </airport-info>
+            </div>
+            <div flex></div>
+            <div layout="column">
+              <fuel></fuel>
+              <atis ng-controller="Hide"></atis>
+            </div>
           </div>
         </div>
       </div>

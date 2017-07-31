@@ -1,8 +1,15 @@
 server_host = document.location.protocol + '//' + document.location.host
 var app = angular.module('app', [
     'ui.grid', 'ui.grid.edit', 'ui.grid.resizeColumns', 'ui.bootstrap',
-    'cb.x2js', 'ngMaterial']);
- 
+    'cb.x2js', 'ngMaterial', 'AngularPrint']);
+
+/*
+(function() {
+  'use strict';
+
+  angular.module('app', ['AngularPrint']);
+})();
+*/
 app.filter('keyboardShortcut', function($window) {
   return function(str) {
     if (!str) return;
@@ -73,22 +80,16 @@ app.service('FlightPlan', function($timeout, $http) {
       this._LoadFrequency(type, 'com', ['TWR', 'CTAF'])
       this._LoadFrequency(type, 'ground', ['GND', 'Ground'])
       this.airports[type].runways = []
+      
       for (runway_name in this.plan[type].runways) {
         runway = this.plan[type].runways[runway_name];
         this.airports[type].runways.push(
             {'name': runway_name, 'length': runway.length_ft})
       }
+      this.airports[type].url =
+          "https://flttrack.fltplan.com/AirportDiagrams/"
+          + this.plan[type].id + "apt.jpg";
     }
-    /*for (var key in flight_plan.settings) {
-      this.plan.settings[key] = flight_plan.settings[key];
-    }
-    for (var category of ['waypoints', 'legs']) {
-      this.plan[category].length = 0;
-      for (var row of flight_plan[category]) {
-        this.plan[category].push(row);
-      }
-    }*/
-
   }
   
   this.SaveFlightPlan = function() {
@@ -267,51 +268,62 @@ app.controller('PlanSettings', ['$scope', 'FlightPlan',
   };
 }]);
 
+GenWaypointController = function(show_notes) {
+  return function ($scope, $http, $timeout, uiGridConstants,
+                         FlightPlan) {
+    $scope.fp = FlightPlan.plan;
+    $scope.$watchCollection('fp.waypoints', function(newVal, old) {
+      $scope.gridOptions.data = [];
+      if (typeof newVal == 'undefined') {return;}
+      for (waypoint of newVal) {
+        $scope.gridOptions.data.push(waypoint);
+      }
+    }); 
+    
+    $scope.gridOptions = {
+      'enableHorizontalScrollbar': uiGridConstants.scrollbars.NEVER,
+      'enableVerticalScrollbar': uiGridConstants.scrollbars.NEVER,
+  
+      'columnDefs': [
+        {
+          name: 'notes',
+          displayName: 'Notes',
+          enableCellEdit: true,
+          type: 'string',
+          width: '50%',
+          visible: show_notes
+        }, {
+          name: 'waypoint',
+          displayName: 'Waypoint',
+          enableCellEdit: true,
+          type: 'string',
+        },
+      ],
+      'data': [],
+    };
+  
+    $scope.gridOptions.onRegisterApi = function(gridApi){
+      //set gridApi on scope
+      $scope.gridApi = gridApi;
+      gridApi.edit.on.afterCellEdit($scope, function(rowEntity, colDef,
+                                                     newValue, oldValue) {
+        FlightPlan.SaveFlightPlan();
+      });
+    };
+    if (show_notes) {FetchAndLoadGridTemplate($http, $scope, 'waypoints');}
+  }
+}
+
+
+
+app.controller('WaypointsWithNotes', ['$scope', '$http', '$timeout',
+                                      'uiGridConstants', 'FlightPlan',
+               GenWaypointController(true)]);
+
 app.controller('Waypoints', ['$scope', '$http', '$timeout',
                              'uiGridConstants', 'FlightPlan',
-               function ($scope, $http, $timeout, uiGridConstants,
-                         FlightPlan) {
-  $scope.fp = FlightPlan.plan;
-  $scope.$watchCollection('fp.waypoints', function(newVal, old) {
-    $scope.gridOptions.data = [];
-    if (typeof newVal == 'undefined') {return;}
-    for (waypoint of newVal) {
-      $scope.gridOptions.data.push(waypoint);
-    }
-  }); 
-  
-  $scope.gridOptions = {
-    'enableHorizontalScrollbar': uiGridConstants.scrollbars.NEVER,
-    'enableVerticalScrollbar': uiGridConstants.scrollbars.NEVER,
+               GenWaypointController(false)]);
 
-    'columnDefs': [
-      {
-        name: 'notes',
-        displayName: 'Notes',
-        enableCellEdit: true,
-        type: 'string',
-        width: '50%'
-      }, {
-        name: 'waypoint',
-        displayName: 'Waypoint',
-        enableCellEdit: true,
-        type: 'string',
-        width: '50%'
-      },
-    ],
-    'data': [],
-  };
-
-  $scope.gridOptions.onRegisterApi = function(gridApi){
-    //set gridApi on scope
-    $scope.gridApi = gridApi;
-    gridApi.edit.on.afterCellEdit($scope, function(rowEntity, colDef,
-                                                   newValue, oldValue) {
-      FlightPlan.SaveFlightPlan();
-    });
-  };
-  FetchAndLoadGridTemplate($http, $scope, 'waypoints');
-}]);
 
 variance = -13.5;
 wind_dir = 310;
@@ -685,22 +697,26 @@ app.controller('Airport', ['$scope', 'FlightPlan',
   $scope.$watch('type', function() {
     $scope.airport = FlightPlan.airports[$scope.type];
   });
-  $scope.airport_diagram = "https://flttrack.fltplan.com/AirportDiagrams/KPAOapt.jpg";
-  $scope.weather_label = "ATIS";
-  $scope.ground_label = "Ground";
-  $scope.com_label = "Tower";
-  $scope.weather_freq = "135.27";
-  $scope.ground_freq = "125.0";
-  $scope.com_freq = "118.6";
   $scope.tpa = "1000 / 800";
-  $scope.runway = [];
-  $scope.runway.push({"name": "31 / 13", "length": "2500"});
-  $scope.runway.push({"name": "", "length": ""});
   $scope.takeoff_performance = "800 / 1200";
   $scope.landing_performance = "800 / 1275";
 }]);
 
-app.controller('Atis', ['$scope', 'FlightPlan',
-    function Departure($scope, FlightPlan) {
-  $scope.fp = FlightPlan.plan;
+app.directive('atis', function() {
+  return {
+    templateUrl: 'atis.html',
+  }
+});
+
+app.directive('fuel', function() {
+  return {
+    templateUrl: 'fuel.html',
+  }
+});
+
+app.controller('Hide', ['$scope',
+    function Airport($scope) {
+  $scope.hide = true;
 }]);
+
+
